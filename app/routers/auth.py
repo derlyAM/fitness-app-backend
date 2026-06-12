@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import UsuarioCreate, UsuarioResponse
 from app.schemas.auth import LoginRequest, LoginResponse
 import bcrypt
-from jose import jwt
+from jose import jwt, JWTError
 from datetime import datetime, timedelta
 import os
 
@@ -14,6 +15,18 @@ router = APIRouter(prefix="/api", tags=["auth"])
 SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta")
 ALGORITHM = "HS256"
 TOKEN_EXPIRY = 60 * 24
+
+_bearer = HTTPBearer()
+
+def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Security(_bearer),
+) -> int:
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    return user_id
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
